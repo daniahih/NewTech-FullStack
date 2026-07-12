@@ -40,6 +40,7 @@ function displayShirt(tshirts) {
     <p> Color :${tshirt.color} </p>
     <p> size :${tshirt.size} </p>
     <p> Price : $ ${tshirt.price} </p>
+
     </section>
     `;
     tshirtContainer.appendChild(card);
