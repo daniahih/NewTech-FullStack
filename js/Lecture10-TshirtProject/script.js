@@ -7,7 +7,7 @@ const colorInput = document.getElementById("color");
 const sizeInput = document.getElementById("size");
 const tshirtForm = document.getElementById("tshirtForm");
 
-const API_URL = "https://6a37f28fc105017aa6397b14.mockapi.io/tshirts";
+const API_URL = "https://6a79d40d674f43f4db11d0bb.mockapi.io/tshirts";
 async function getShirts() {
   try {
     const response = await fetch(API_URL);
