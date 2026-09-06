@@ -16,9 +16,11 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
-
-    // We will store the HASHED password here,
-    // not the original plain-text password.
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
+    },
     password: {
       type: String,
       required: true,

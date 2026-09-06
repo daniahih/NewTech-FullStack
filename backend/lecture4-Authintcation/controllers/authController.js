@@ -80,6 +80,7 @@ export const loginUser = async (req, res) => {
 
     res.status(201).json({
       message: "User in DataBase with correct password ",
+      token,
       user: {
         id: user._id,
         name: user.name,

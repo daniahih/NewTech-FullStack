@@ -9,6 +9,10 @@ import {
   updateMovie,
   deleteMovie,
 } from "../controllers/movieController.js";
+import {
+  authrizationMiddleWare,
+  adminOrMovieOwner,
+} from "../middleware/authrizationMiddleWare.js";
 
 const router = express.Router();
 
@@ -20,10 +24,15 @@ router.get("/filter", filterMovies);
 
 router.get("/:id", getMovieById);
 
-router.post("/", authMiddleware, addMoive);
+router.post(
+  "/",
+  authMiddleware,
+  authrizationMiddleWare("admin", "user"),
+  addMoive,
+);
 
-router.put("/:id", updateMovie);
+router.put("/:id", authMiddleware, adminOrMovieOwner, updateMovie);
 
-router.delete("/:id", deleteMovie);
+router.delete("/:id", authMiddleware, adminOrMovieOwner, deleteMovie);
 
 export default router;

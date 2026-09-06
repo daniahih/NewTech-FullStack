@@ -42,6 +42,11 @@ const moiveSchema = new mongoose.Schema(
     releaseDate: {
       type: Date,
     },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
   },
   {
     timestamps: true,

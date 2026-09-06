@@ -69,6 +69,7 @@ export const addMoive = async (req, res) => {
       views,
       tags,
       releaseDate,
+      createdBy: req.user._id,
     });
     res.status(201).json(newMovie);
   } catch (error) {
@@ -81,10 +82,11 @@ export const addMoive = async (req, res) => {
 
 export const updateMovie = async (req, res) => {
   try {
+    const { createdBy, ...updates } = req.body;
     const updatedMovie = await Movie.findByIdAndUpdate(
       req.params.id,
 
-      req.body,
+      updates,
 
       {
         new: true,
@@ -279,7 +281,8 @@ export const filterMovies = async (req, res) => {
 
     // ---- date range --------------------------------------------------------
     const dateRange = {};
-    if (from && !Number.isNaN(Date.parse(from))) dateRange.$gte = new Date(from);
+    if (from && !Number.isNaN(Date.parse(from)))
+      dateRange.$gte = new Date(from);
     if (to && !Number.isNaN(Date.parse(to))) dateRange.$lte = new Date(to);
     if (Object.keys(dateRange).length) filter.releaseDate = dateRange;
 
