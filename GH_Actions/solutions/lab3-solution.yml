@@ -1,0 +1,314 @@
+# ============================================================================
+# Lab 3 Solution: Parallel Jobs Workflow
+# ============================================================================
+# This workflow demonstrates:
+#
+#   1. Jobs running in PARALLEL by default (no 'needs' between them)
+#   2. Fan-in with 'needs: [...]' to wait for multiple parallel jobs
+#   3. Reading job results inside a downstream job
+#   4. BONUS: Cross-platform matrix (ubuntu, macos, windows)
+#   5. BONUS: fail-fast: false so all matrix legs always complete
+#   6. BONUS: Code coverage upload per module
+#   7. BONUS: A concurrent security-scan job
+#
+# Workflow execution order:
+#
+#   STAGE 1 (parallel):
+#       test-validator ──┐
+#       test-transformer ─┤  all start simultaneously, run on separate runners
+#       test-reporter  ──┤
+#       security-scan  ──┘
+#
+#   STAGE 2 (fan-in):
+#       pipeline-summary  (waits for all four above to finish)
+#
+# ============================================================================
+
+name: Lab 3 - Parallel Jobs Solution
+
+# ============================================================================
+# TRIGGERS
+# ============================================================================
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+# ============================================================================
+# JOBS
+# ============================================================================
+jobs:
+
+  # --------------------------------------------------------------------------
+  # JOB 1 — test-validator
+  # Runs in parallel with test-transformer and test-reporter.
+  # No 'needs:' → GitHub starts it immediately when the workflow is triggered.
+  # --------------------------------------------------------------------------
+  test-validator:
+    name: "Test Validator (Python ${{ matrix.python-version }} / ${{ matrix.os }})"
+    # BONUS: run on three operating systems in parallel via matrix
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      # BONUS: fail-fast: false — keep running all legs even if one fails
+      # Without this, a failure on ubuntu would cancel the macos and windows runs
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.11']
+
+    steps:
+      # STEP 1: Download the repository code onto the runner
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # STEP 2: Install the requested Python version
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # STEP 3: Install test dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+        working-directory: './GH_Actions/lab3'
+
+      # STEP 4: Run only the validator test suite with coverage
+      - name: Run validator tests
+        run: |
+          pytest test_validator.py -v \
+            --cov=validator \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-validator.xml
+        working-directory: './GH_Actions/lab3'
+        shell: bash
+
+      # BONUS: Save the coverage XML so it can be downloaded from the Actions tab
+      # Only upload once (ubuntu, Python 3.11) to avoid duplicate artifacts
+      - name: Upload validator coverage report
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-validator
+          path: ./GH_Actions/lab3/coverage-validator.xml
+
+  # --------------------------------------------------------------------------
+  # JOB 2 — test-transformer
+  # Also starts immediately (no 'needs:').
+  # Runs alongside test-validator on a completely separate runner.
+  # --------------------------------------------------------------------------
+  test-transformer:
+    name: "Test Transformer (Python ${{ matrix.python-version }} / ${{ matrix.os }})"
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.11']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+        working-directory: './GH_Actions/lab3'
+
+      - name: Run transformer tests
+        run: |
+          pytest test_transformer.py -v \
+            --cov=transformer \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-transformer.xml
+        working-directory: './GH_Actions/lab3'
+        shell: bash
+
+      - name: Upload transformer coverage report
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-transformer
+          path: ./GH_Actions/lab3/coverage-transformer.xml
+
+  # --------------------------------------------------------------------------
+  # JOB 3 — test-reporter
+  # Also starts immediately (no 'needs:').
+  # reporter.py imports from validator.py and transformer.py — that's fine
+  # because all three files are present in the working directory on every runner.
+  # --------------------------------------------------------------------------
+  test-reporter:
+    name: "Test Reporter (Python ${{ matrix.python-version }} / ${{ matrix.os }})"
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.11']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+        working-directory: './GH_Actions/lab3'
+
+      - name: Run reporter tests
+        run: |
+          pytest test_reporter.py -v \
+            --cov=reporter \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-reporter.xml
+        working-directory: './GH_Actions/lab3'
+        shell: bash
+
+      - name: Upload reporter coverage report
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reporter
+          path: ./GH_Actions/lab3/coverage-reporter.xml
+
+  # --------------------------------------------------------------------------
+  # BONUS JOB — security-scan
+  # Runs in parallel with the three test jobs.
+  # Uses 'pip-audit' to check for known CVEs in the dependencies.
+  # --------------------------------------------------------------------------
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit dependencies for known CVEs
+        run: |
+          pip install -r requirements.txt
+          pip-audit --desc
+        working-directory: './GH_Actions/lab3'
+        # Don't block the summary if audit finds advisories
+        continue-on-error: true
+
+  # --------------------------------------------------------------------------
+  # JOB 4 — pipeline-summary  (FAN-IN)
+  # This job is the fan-in point.  It cannot start until every job listed in
+  # 'needs' has finished — whether they passed or failed.
+  #
+  # 'if: always()' ensures this job runs even when one of the parallel jobs
+  # fails, so students always get a final status report.
+  # --------------------------------------------------------------------------
+  pipeline-summary:
+    name: Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: [test-validator, test-transformer, test-reporter, security-scan]
+    if: always()
+
+    steps:
+      - name: Print results of all parallel jobs
+        run: |
+          echo "========================================================"
+          echo "  Data Pipeline CI — Parallel Job Results"
+          echo "========================================================"
+          echo ""
+          echo "  Validator tests  : ${{ needs.test-validator.result }}"
+          echo "  Transformer tests: ${{ needs.test-transformer.result }}"
+          echo "  Reporter tests   : ${{ needs.test-reporter.result }}"
+          echo "  Security scan    : ${{ needs.security-scan.result }}"
+          echo ""
+          echo "========================================================"
+
+      # Exit with failure if any required test job did not succeed
+      - name: Fail if any test job failed
+        if: |
+          needs.test-validator.result   != 'success' ||
+          needs.test-transformer.result != 'success' ||
+          needs.test-reporter.result    != 'success'
+        run: |
+          echo "One or more test jobs failed. See details above."
+          exit 1
+
+# ============================================================================
+# SIMPLIFIED VERSION (minimum requirements — no matrix, no security scan)
+# ============================================================================
+# If you want to show students a minimal passing solution first, here it is:
+#
+# name: Lab 3 - Parallel Jobs (Minimal)
+#
+# on:
+#   push:
+#     branches: [ main ]
+#   pull_request:
+#     branches: [ main ]
+#
+# jobs:
+#   test-validator:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v5
+#       - uses: actions/setup-python@v6
+#         with: { python-version: '3.11' }
+#       - run: pip install -r requirements.txt
+#         working-directory: './GH_Actions/lab3'
+#       - run: pytest test_validator.py -v
+#         working-directory: './GH_Actions/lab3'
+#
+#   test-transformer:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v5
+#       - uses: actions/setup-python@v6
+#         with: { python-version: '3.11' }
+#       - run: pip install -r requirements.txt
+#         working-directory: './GH_Actions/lab3'
+#       - run: pytest test_transformer.py -v
+#         working-directory: './GH_Actions/lab3'
+#
+#   test-reporter:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v5
+#       - uses: actions/setup-python@v6
+#         with: { python-version: '3.11' }
+#       - run: pip install -r requirements.txt
+#         working-directory: './GH_Actions/lab3'
+#       - run: pytest test_reporter.py -v
+#         working-directory: './GH_Actions/lab3'
+#
+#   pipeline-summary:
+#     runs-on: ubuntu-latest
+#     needs: [test-validator, test-transformer, test-reporter]
+#     if: always()
+#     steps:
+#       - run: |
+#           echo "Validator   : ${{ needs.test-validator.result }}"
+#           echo "Transformer : ${{ needs.test-transformer.result }}"
+#           echo "Reporter    : ${{ needs.test-reporter.result }}"
+# ============================================================================
